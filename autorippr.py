@@ -44,7 +44,6 @@ Options:
     --debug             Output debug.
     --rip               Rip disc using makeMKV.
     --compress          Compress using HandBrake or FFmpeg.
-    --extra             Lookup, rename and/or download extras.
     --all               Do everything.
     --test              Tests config and requirements.
     --silent            Silent mode.
@@ -60,11 +59,9 @@ import sys
 
 import yaml
 from classes import *
-from tendo import singleton
 
 __version__ = "1.7.0"
 
-me = singleton.SingleInstance()
 CONFIG_FILE = "{}/settings.cfg".format(
     os.path.dirname(os.path.abspath(__file__)))
 
@@ -336,101 +333,6 @@ def compress(config):
         log.info("Queue does not exist or is empty")
 
 
-def extras(config):
-    """
-        Main function for filebotting and flagging forced subs
-        Does everything
-        Returns nothing
-    """
-    log = logger.Logger("Extras", config['debug'], config['silent'])
-
-    fb = filebot.FileBot(config['debug'], config['silent'])
-
-    dbvideos = database.next_video_to_filebot()
-
-    for dbvideo in dbvideos:
-        if config['ForcedSubs']['enable']:
-            forced = mediainfo.ForcedSubs(config)
-            log.info("Attempting to discover foreign subtitle for {}.".format(dbvideo.vidname))
-            track = forced.discover_forcedsubs(dbvideo)
-
-            if track is not None:
-                log.info("Found foreign subtitle for {}: track {}".format(dbvideo.vidname, track))
-                log.debug("Attempting to flag track for {}: track {}".format(dbvideo.vidname, track))
-                flagged = forced.flag_forced(dbvideo, track)
-                if flagged:
-                    log.info("Flagging success.")
-                else:
-                    log.debug("Flag failed")
-            else:
-                log.debug("Did not find foreign subtitle for {}.".format(dbvideo.vidname))
-                
-        log.info("Attempting video rename")
-
-        database.update_video(dbvideo, 7)
-
-        movePath = dbvideo.path
-        if config['filebot']['move']:
-            if dbvideo.vidtype == "tv":
-                movePath = config['filebot']['tvPath']
-            else:
-                movePath = config['filebot']['moviePath']
-
-        status = fb.rename(dbvideo, movePath)
-
-        if status[0]:
-            log.info("Rename success")
-
-            database.update_video(dbvideo, 6)
-
-            if config['filebot']['subtitles']:
-                log.info("Grabbing subtitles")
-
-                status = fb.get_subtitles(
-                    dbvideo, config['filebot']['language'])
-
-                if status:
-                    log.info("Subtitles downloaded")
-                    database.update_video(dbvideo, 8)
-
-                else:
-                    log.info("Subtitles not downloaded, no match")
-                    database.update_video(dbvideo, 8)
-
-                log.info("Completed work on {}".format(dbvideo.vidname))
-
-                if config['commands'] is not None and len(config['commands']) > 0:
-                    for com in config['commands']:
-                        subprocess.Popen(
-                            [com],
-                            stderr=subprocess.PIPE,
-                            stdout=subprocess.PIPE,
-                            shell=True
-                        )
-
-            else:
-                log.info("Not grabbing subtitles")
-                database.update_video(dbvideo, 8)
-
-
-
-            if 'extra' in config['notification']['notify_on_state']:
-                notify.extra_complete(dbvideo)
-
-            log.debug("Attempting to delete %s" % dbvideo.path)
-
-            try:
-                os.rmdir(dbvideo.path)
-            except OSError as ex:
-                if ex.errno == errno.ENOTEMPTY:
-                    log.debug("Directory not empty")
-
-        else:
-            log.info("Rename failed")
-
-    else:
-        log.info("No videos ready for filebot")
-
 
 if __name__ == '__main__':
     arguments = docopt.docopt(__doc__, version=__version__)
@@ -462,6 +364,3 @@ if __name__ == '__main__':
 
     if arguments['--skip-compress']:
         skip_compress(config)
-
-    if arguments['--extra'] or arguments['--all']:
-        extras(config)

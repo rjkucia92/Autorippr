@@ -55,8 +55,7 @@ class HandBrake(object):
 
         invid = "%s/%s" % (dbvideo.path, dbvideo.filename)
         outvid = "%s/%s" % (dbvideo.path, vidname)
-        command = 'nice -n {0} {1}HandBrakeCLI --verbose -i "{2}" -o "{3}" {4}'.format(
-            nice,
+        command = '{0}HandBrakeCLI --verbose -i "{1}" -o "{2}" {3}'.format(
             self.compressionPath,
             invid,
             outvid,
